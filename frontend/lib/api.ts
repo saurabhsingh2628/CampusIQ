@@ -22,4 +22,17 @@ export async function getStudentCareerAdvisor(studentId: string) {
   }
 
   return response.json();
-}
+}
+
+export async function getStudentSkillGapAnalysis(studentId: string) {
+  const response = await fetch(
+    `${API_URL}/students/${studentId}/skill-gap-analysis`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch skill gap analysis data");
+  }
+
+  return response.json();
+}
+

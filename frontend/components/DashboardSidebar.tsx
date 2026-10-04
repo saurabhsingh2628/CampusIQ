@@ -29,6 +29,10 @@ const navigation = [
     href: "/career-advisor",
   },
   {
+    name: "AI Skill Gap Analyzer",
+    href: "/skill-gap-analysis",
+  },
+  {
     name: "Placement Intelligence",
     href: "/placement",
   },
