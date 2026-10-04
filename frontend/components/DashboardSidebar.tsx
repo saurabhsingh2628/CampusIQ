@@ -17,6 +17,10 @@ const navigation = [
     href: "/attendance",
   },
   {
+    name: "AI Performance Analysis",
+    href: "/performance-analysis",
+  },
+  {
     name: "Career Intelligence",
     href: "/career",
   },
