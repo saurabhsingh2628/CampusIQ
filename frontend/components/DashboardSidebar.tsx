@@ -25,6 +25,10 @@ const navigation = [
     href: "/career",
   },
   {
+    name: "AI Career Advisor",
+    href: "/career-advisor",
+  },
+  {
     name: "Placement Intelligence",
     href: "/placement",
   },

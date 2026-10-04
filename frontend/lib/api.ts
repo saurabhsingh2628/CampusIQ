@@ -11,3 +11,15 @@ export async function getStudentAnalytics(studentId: string) {
 
   return response.json();
 }
+
+export async function getStudentCareerAdvisor(studentId: string) {
+  const response = await fetch(
+    `${API_URL}/students/${studentId}/career-advisor`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch career advisor data");
+  }
+
+  return response.json();
+}

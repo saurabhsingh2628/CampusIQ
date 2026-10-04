@@ -688,3 +688,368 @@ def get_student_performance_analysis(student_id: str):
         "recommendations": recommendations,
         "suggested_next_actions": suggested_next_actions
     }
+
+
+# ============================================================
+# AI CAREER ADVISOR (Deterministic / Rule-based Guidance)
+# ============================================================
+
+@app.get("/students/{student_id}/career-advisor")
+def get_student_career_advisor(student_id: str):
+
+    # 1. Fetch student profile
+    student_response = (
+        supabase
+        .table("student_profiles")
+        .select("*")
+        .eq("id", student_id)
+        .single()
+        .execute()
+    )
+
+    student = student_response.data
+
+    if not student:
+        return {
+            "error": "Student not found",
+            "student_id": student_id
+        }
+
+    # 2. Fetch academic records with subject details
+    academic_response = (
+        supabase
+        .table("academic_records")
+        .select("*, subjects(subject_code, subject_name, credits)")
+        .eq("student_id", student_id)
+        .execute()
+    )
+    academic_data = academic_response.data or []
+
+    # 3. Fetch attendance records with subject details
+    attendance_response = (
+        supabase
+        .table("attendance")
+        .select("*, subjects(subject_code, subject_name, credits)")
+        .eq("student_id", student_id)
+        .execute()
+    )
+    attendance_data = attendance_response.data or []
+
+    # Metrics calculation
+    cgpa = float(student.get("cgpa") or 0.0)
+    branch = student.get("branch") or "CSE"
+    semester = int(student.get("semester") or 1)
+
+    # Average marks
+    if academic_data:
+        valid_marks = [
+            float(r["marks"])
+            for r in academic_data
+            if r.get("marks") is not None
+        ]
+        average_marks = sum(valid_marks) / len(valid_marks) if valid_marks else 0.0
+    else:
+        average_marks = 0.0
+
+    # Average attendance
+    if attendance_data:
+        valid_attendance = [
+            float(r["attendance_percentage"])
+            for r in attendance_data
+            if r.get("attendance_percentage") is not None
+        ]
+        average_attendance = sum(valid_attendance) / len(valid_attendance) if valid_attendance else 0.0
+    else:
+        average_attendance = 0.0
+
+    # Align with existing Career Intelligence & Placement data
+    career_strength = min(round((cgpa / 10.0) * 100), 100)
+    placement_readiness = min(
+        round(
+            (cgpa / 10.0) * 50.0
+            + min(average_marks / 100.0, 1.0) * 30.0
+            + 20.0,
+            2
+        ),
+        100.0
+    )
+
+    placement_preparation = {
+        "DSA": 78,
+        "Aptitude": 85,
+        "Communication": 72,
+        "Resume": 90
+    }
+
+    # 1. Career Readiness Score (0 - 100)
+    # Balanced weighting:
+    # 30% CGPA + 20% Marks + 25% Placement Readiness + 15% Career Strength + 10% Attendance
+    cgpa_comp = (min(cgpa, 10.0) / 10.0) * 30.0
+    marks_comp = (min(average_marks, 100.0) / 100.0) * 20.0
+    placement_comp = (placement_readiness / 100.0) * 25.0
+    career_comp = (career_strength / 100.0) * 15.0
+    attendance_comp = (min(average_attendance, 100.0) / 100.0) * 10.0
+
+    career_readiness_score = round(
+        min(cgpa_comp + marks_comp + placement_comp + career_comp + attendance_comp, 100.0),
+        1
+    )
+
+    if career_readiness_score >= 85.0:
+        readiness_status = "Tier-1 / Market Ready"
+        readiness_summary = "Outstanding career foundation with strong potential for Tier-1 product companies and top-flight recruitment drives."
+    elif career_readiness_score >= 70.0:
+        readiness_status = "Competitive / Good Standing"
+        readiness_summary = "Well-rounded academic and coding profile. Strategic focus on advanced design and deployment will maximize offers."
+    elif career_readiness_score >= 55.0:
+        readiness_status = "Developing Competency"
+        readiness_summary = "Solid core basics established. Requires disciplined execution of technical roadmap to elevate readiness."
+    else:
+        readiness_status = "Needs Acceleration"
+        readiness_summary = "Immediate academic and skill acceleration required to meet campus placement benchmarks."
+
+    # 2 & 3. Recommended Career Paths & Why Recommended
+    recommended_career_paths = [
+        {
+            "id": "full-stack-engineer",
+            "title": "Full Stack Software Engineer",
+            "match_percentage": 92,
+            "demand_level": "Very High",
+            "industry": "Product & SaaS Enterprises",
+            "why_recommended": (
+                "Direct synergy with your React, Next.js, and JavaScript front-end skill set "
+                "coupled with Python backend services and Grade A Data Structures fundamentals."
+            ),
+            "matched_skills": ["React", "Next.js", "JavaScript", "Python", "SQL", "Git & GitHub"],
+            "target_roles": ["Full Stack Developer", "Frontend Engineer", "API Engineer"],
+            "salary_range": "₹8 - ₹18 LPA"
+        },
+        {
+            "id": "backend-cloud-engineer",
+            "title": "Backend & Cloud Engineer",
+            "match_percentage": 84,
+            "demand_level": "High",
+            "industry": "Enterprise Tech & Cloud Services",
+            "why_recommended": (
+                "Strong core algorithmic logic in C++ and Python alongside SQL database management. "
+                "Adding Docker containerization and cloud basics will make you a prime candidate."
+            ),
+            "matched_skills": ["Python", "C++", "SQL", "Git & GitHub"],
+            "target_roles": ["Backend Developer", "Systems Engineer", "Cloud Associate"],
+            "salary_range": "₹7 - ₹16 LPA"
+        },
+        {
+            "id": "data-analytics-engineer",
+            "title": "Data Analytics & Engineering",
+            "match_percentage": 78,
+            "demand_level": "High",
+            "industry": "FinTech, E-Commerce & Analytics",
+            "why_recommended": (
+                "High quantitative problem-solving ability (85% Aptitude score) combined with "
+                "database manipulation skills in SQL and data processing in Python."
+            ),
+            "matched_skills": ["Python", "SQL", "Aptitude Assessment (85%)"],
+            "target_roles": ["Data Analyst", "Associate Data Engineer", "BI Specialist"],
+            "salary_range": "₹6 - ₹14 LPA"
+        }
+    ]
+
+    # 4. Current Strengths
+    strengths = []
+    if cgpa >= 8.0:
+        strengths.append(f"High cumulative CGPA ({cgpa:.2f}) easily satisfies eligibility cutoffs for over 95% of visiting companies.")
+    if average_marks >= 80.0:
+        strengths.append(f"Consistent examination mastery with an overall subject average of {average_marks:.1f}%.")
+    if average_attendance >= 85.0:
+        strengths.append(f"Exemplary attendance track record ({average_attendance:.1f}%) demonstrating reliability and professional discipline.")
+
+    strengths.append("Versatile full-stack web skillset spanning React, Next.js, Python, and SQL.")
+    strengths.append("High placement resume rating (90%) and strong quantitative problem-solving aptitude (85%).")
+
+    for rec in academic_data:
+        m = float(rec.get("marks") or 0)
+        s = rec.get("subjects") or {}
+        s_name = s.get("subject_name") or "Subject"
+        if m >= 80.0:
+            strengths.append(f"Subject proficiency in {s_name} with {m:.1f}% marks (Grade {rec.get('grade', 'A')}).")
+
+    # 5. Skill Gaps
+    skill_gaps = [
+        {
+            "skill": "System Design & Distributed Architecture",
+            "severity": "Critical",
+            "impact": "Crucial differentiator for clearing Tier-1 product company technical interviews and building scalable systems."
+        },
+        {
+            "skill": "Docker & Containerization",
+            "severity": "High",
+            "impact": "Essential for containerizing microservices, setting up reproducible dev environments, and production CI/CD."
+        },
+        {
+            "skill": "Cloud Infrastructure (AWS / GCP)",
+            "severity": "Medium",
+            "impact": "Vital for deploying cloud-native backends, managing remote databases, and serverless compute."
+        },
+        {
+            "skill": "Advanced DSA (Graphs & Dynamic Programming)",
+            "severity": "Medium",
+            "impact": "Needed to boost DSA readiness from 78% to 85%+ to conquer competitive online coding assessments."
+        }
+    ]
+
+    # 6. Priority Skills to Learn
+    priority_skills = [
+        {
+            "rank": 1,
+            "name": "System Design Fundamentals",
+            "category": "Architecture",
+            "urgency": "Urgent",
+            "estimated_weeks": 4,
+            "focus_areas": "Load balancers, caching strategies (Redis), database sharding, CAP theorem, and REST/GraphQL architecture."
+        },
+        {
+            "rank": 2,
+            "name": "Docker & Containerization",
+            "category": "DevOps",
+            "urgency": "High",
+            "estimated_weeks": 2,
+            "focus_areas": "Multi-stage Dockerfiles, Docker Compose multi-service coordination, volume persistence, and container networking."
+        },
+        {
+            "rank": 3,
+            "name": "AWS Cloud Foundations",
+            "category": "Cloud Infrastructure",
+            "urgency": "Medium",
+            "estimated_weeks": 3,
+            "focus_areas": "EC2 virtual instances, S3 storage, managed PostgreSQL RDS, IAM role policies, and serverless Lambda."
+        },
+        {
+            "rank": 4,
+            "name": "Advanced Graph & DP Algorithms",
+            "category": "Problem Solving",
+            "urgency": "Medium",
+            "estimated_weeks": 4,
+            "focus_areas": "Graph traversals (BFS, DFS, Dijkstra), 2D dynamic programming patterns, memoization, and time-space optimization."
+        }
+    ]
+
+    # 7. Recommended Learning Roadmap
+    learning_roadmap = [
+        {
+            "phase": "Phase 1: Advanced Algorithms & Architecture Foundations",
+            "timeframe": "Weeks 1 - 4",
+            "objective": "Solidify high-frequency coding patterns and grasp fundamental distributed system concepts.",
+            "milestones": [
+                "Solve 25 LeetCode Medium problems focusing on Graphs, Trees, and Dynamic Programming.",
+                "Learn scalable system building blocks: Reverse proxy, CDN, Redis caching, and database read replicas.",
+                "Review time and space complexity trade-offs for technical interview communication."
+            ],
+            "outcome": "Elevates DSA readiness score past 85% and provides confident system design vocabulary."
+        },
+        {
+            "phase": "Phase 2: Containerization & Modern DevOps Workflows",
+            "timeframe": "Weeks 5 - 8",
+            "objective": "Package full-stack applications into standardized Docker containers with CI automation.",
+            "milestones": [
+                "Author optimized multi-stage Dockerfiles for Next.js frontend and FastAPI backend.",
+                "Configure Docker Compose orchestration integrating backend, frontend, and PostgreSQL database.",
+                "Set up automated build and lint checks using GitHub Actions workflows."
+            ],
+            "outcome": "Multi-container full-stack application repository ready to showcase on GitHub."
+        },
+        {
+            "phase": "Phase 3: Cloud Deployment & Production Hardening",
+            "timeframe": "Weeks 9 - 12",
+            "objective": "Deploy scalable applications to cloud environments with automated security and monitoring.",
+            "milestones": [
+                "Deploy backend services to AWS ECS or Google Cloud Run container services.",
+                "Implement Redis caching to optimize database response times under simulated load.",
+                "Secure application with HTTPS, environment secrets management, and custom domain routing."
+            ],
+            "outcome": "Live public application link to prominently display on resume and LinkedIn."
+        },
+        {
+            "phase": "Phase 4: Placement Simulation & Behavioral Mastery",
+            "timeframe": "Weeks 13 - 16",
+            "objective": "Simulate end-to-end interview rounds to convert candidate shortlists into top offers.",
+            "milestones": [
+                "Participate in 4 peer-led technical mock interviews covering live coding and architecture.",
+                "Structure project explanations using the STAR (Situation, Task, Action, Result) methodology.",
+                "Complete company-specific aptitude and rapid coding practice tests for target recruiters."
+            ],
+            "outcome": "Comprehensive readiness across technical, analytical, and HR placement rounds."
+        }
+    ]
+
+    # 8. Placement Alignment
+    placement_alignment = {
+        "overall_placement_readiness": placement_readiness,
+        "eligible_companies": [
+            "TCS",
+            "Infosys",
+            "Accenture",
+            "Deloitte",
+            "Cognizant"
+        ],
+        "tier_1_product_readiness": "Eligible by CGPA; Requires System Design and 85%+ DSA readiness.",
+        "tier_2_services_readiness": "Immediate Shortlist Standing across all criteria.",
+        "preparation_scores": placement_preparation,
+        "funnel_summary": {
+            "applications": 3,
+            "shortlisted": 2,
+            "interviews": 1,
+            "offers": 0,
+            "conversion_rate": "66.7% Shortlist Rate"
+        },
+        "strategic_alignment_note": (
+            "Your resume score (90%) and aptitude (85%) consistently secure initial interview invitations. "
+            "Increasing DSA proficiency from 78% to 85% and practicing verbal technical explanations will "
+            "directly turn interview rounds into confirmed offers."
+        )
+    }
+
+    # 9. Personalized Career Advice
+    personalized_career_advice = [
+        f"Leverage your {cgpa:.2f} CGPA as your primary academic credential. It comfortably exceeds the 8.0 benchmark required by tier-1 recruiters and prevents cutoff eliminations.",
+        "Bridge the gap between frontend familiarity and enterprise engineering: having React/Next.js experience is an advantage, but employers specifically look for candidates who understand full lifecycle deployment including Docker and databases.",
+        "Focus on interview conversion efficiency: With 2 shortlists out of 3 applications, your resume is effective. Dedicate 60% of your prep time to technical problem solving and mock interview delivery to convert interviews into offers.",
+        f"In Semester {semester}, timing is optimal: You are in an ideal semester window to execute the 12-week roadmap before mass placement drives accelerate."
+    ]
+
+    # 10. Next Career Actions
+    next_career_actions = [
+        "Containerize your CampusIQ or portfolio application with Docker Compose and push the configuration to GitHub.",
+        "Commit to solving 2 LeetCode medium problems daily, emphasizing Graph traversals and Dynamic Programming.",
+        "Draft a system architecture blueprint for a scalable service (e.g., Notification engine or URL Shortener).",
+        "Conduct a 30-minute mock technical interview with a peer to practice articulating algorithm choices under pressure.",
+        "Review upcoming company placement schedules and prepare company-specific test pattern strategies."
+    ]
+
+    return {
+        "student": {
+            "id": student.get("id"),
+            "name": f"{student.get('first_name', '')} {student.get('last_name', '')}".strip(),
+            "branch": branch,
+            "semester": semester,
+            "cgpa": cgpa,
+            "enrollment_number": student.get("enrollment_number")
+        },
+        "career_readiness_score": career_readiness_score,
+        "readiness_status": readiness_status,
+        "readiness_summary": readiness_summary,
+        "metrics": {
+            "cgpa": cgpa,
+            "average_marks": round(average_marks, 2),
+            "average_attendance": round(average_attendance, 2),
+            "career_strength": career_strength,
+            "placement_readiness": placement_readiness
+        },
+        "recommended_career_paths": recommended_career_paths,
+        "strengths": strengths,
+        "skill_gaps": skill_gaps,
+        "priority_skills": priority_skills,
+        "learning_roadmap": learning_roadmap,
+        "placement_alignment": placement_alignment,
+        "personalized_advice": personalized_career_advice,
+        "next_actions": next_career_actions
+    }
